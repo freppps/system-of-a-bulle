@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "ifcopenshell-capi",
+  "version-string": "0.9.0",
+  "dependencies": [
+    {
+      "name": "opencascade",
+      "default-features": false,
+      "features": ["tbb"]
+    },
+    "boost-iostreams",
+    "boost-program-options",
+    "boost-regex",
+    "boost-system",
+    "boost-thread",
+    "eigen3",
+    "libxml2",
+    "pcre2"
+  ]
+}
