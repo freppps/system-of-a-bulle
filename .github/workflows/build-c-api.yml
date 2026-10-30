@@ -1,0 +1,125 @@
+name: Build IfcOpenShell C API
+
+permissions:
+  contents: write
+
+on:
+  # Manual UI trigger: allows on-demand compilation with custom IfcOpenShell versions
+  workflow_dispatch:
+    inputs:
+      ifc_ref:
+        description: 'Upstream IfcOpenShell tag or branch to compile'
+        required: true
+        default: 'v0.9.0'
+
+  # Tag trigger: runs automatically on version tags (e.g., 1.0.0, 0.9.0-1)
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+*'
+
+jobs:
+  compile-c-api:
+    name: Build C API (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            triplet: x64-linux
+            artifact_name: ifcopenshell-c-api-linux-x64
+            lib_pattern: "libifcopenshell_api.so"
+          - os: macos-latest
+            triplet: arm64-osx-static
+            artifact_name: ifcopenshell-c-api-macos-arm64
+            lib_pattern: "libifcopenshell_api.dylib"
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg_cache
+      UPSTREAM_REF: ${{ github.event.inputs.ifc_ref || 'v0.9.0' }}
+
+    steps:
+      - name: 1. Checkout C API Builder Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Checkout Upstream IfcOpenShell (${{ env.UPSTREAM_REF }})
+        uses: actions/checkout@v4
+        with:
+          repository: IfcOpenShell/IfcOpenShell
+          ref: ${{ env.UPSTREAM_REF }}
+          submodules: recursive
+          path: ifcopenshell
+
+      - name: 3. Stage vcpkg Manifest
+        run: |
+          cp .github/workflows/vcpkg.json ./vcpkg.json
+
+      - name: 4. Install Toolchain Dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            cmake ninja-build bison flex gcc g++ pkg-config \
+            libgl1-mesa-dev libx11-dev libxext-dev
+
+      - name: 4. Install Toolchain Dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install cmake ninja bison flex
+          echo "$(brew --prefix bison)/bin" >> $GITHUB_PATH
+
+      - name: 5. Setup vcpkg Toolchain
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '2024.03.01'
+
+      - name: 6. Restore / Save vcpkg Binary Cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-${{ runner.os }}-${{ matrix.triplet }}-${{ hashFiles('.github/workflows/vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-${{ matrix.triplet }}-
+
+      - name: 7. Configure CMake for C API Target
+        run: |
+          cmake -S ifcopenshell/cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET="${{ matrix.triplet }}" \
+            -DMINIMAL_BUILD=ON \
+            -DBUILD_IFCPYTHON=OFF \
+            -DBUILD_IFCAPI=ON \
+            -DIFCAPI_REGENERATE_BINDINGS=OFF \
+            -DSCHEMA_VERSIONS="2x3;4;4x3_add2"
+
+      - name: 8. Compile C API Shared Library
+        run: |
+          cmake --build build --target ifcopenshell_api --parallel
+
+      - name: 9. Stage C API Artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          find build -name "${{ matrix.lib_pattern }}*" -exec cp {} dist/ \;
+          find ifcopenshell/src/ifcwrap -name "ifcopenshell_api.h" -exec cp {} dist/ \;
+
+      - name: 10. Upload C API Artifacts (Branch CI)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/*
+          retention-days: 7
+
+      - name: 11. Publish C API Assets to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/${{ matrix.lib_pattern }}
+            dist/ifcopenshell_api.h
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
