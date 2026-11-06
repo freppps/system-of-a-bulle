@@ -104,36 +104,37 @@ jobs:
           # Full 40-character SHA-1 commit hash as strictly required by run-vcpkg validation.
           vcpkgGitCommitId: '5b1214315250939257ef5d62ecdcbca18cf4fb1c'
 
-      # Step 7: Configures the build system and triggers dependency compilation via vcpkg.
+      # Step 7: Configures the build system, disables CGAL, and links vcpkg static dependencies.
       - name: 7. Configure CMake for C API Target
         run: |
+          # Notes on flags:
+          # -G Ninja: Enables multi-threaded parallel compilation.
+          # -DCMAKE_BUILD_TYPE=Release: Applies -O3 compiler optimizations.
+          # -DCMAKE_*_COMPILER_LAUNCHER=ccache: Reuses cached object files.
+          # -DCMAKE_TOOLCHAIN_FILE: Integrates vcpkg dependencies.
+          # -DVCPKG_TARGET_TRIPLET: Matches target platform architecture.
+          # -DVCPKG_MANIFEST_DIR: Locates root vcpkg.json.
+          # -DBUILD_SHARED_LIBS=ON: Fixes fatal error when using static triplets.
+          # -DMINIMAL_BUILD=ON & -DWITH_CGAL=OFF: Completely strips GPL CGAL code.
+          # -DBUILD_IFCPYTHON=OFF: Disables Python SWIG wrappers.
+          # -DBUILD_IFCAPI=ON: Enables flat C API shared library.
+          # -DIFCAPI_REGENERATE_BINDINGS=OFF: Uses pre-generated headers.
+          # -DSCHEMA_VERSIONS: Compiles only IFC2x3, IFC4, and IFC4x3_add2.
           cmake -S ifcopenshell/cmake -B build \
-            # -G Ninja: selects the Ninja build generator for fast parallel compilation.
             -G Ninja \
-            # -DCMAKE_BUILD_TYPE=Release: applies -O3 compiler optimizations and strips debug symbols.
             -DCMAKE_BUILD_TYPE=Release \
-            # Intercepts C and C++ compiler calls through ccache to reuse cached object files.
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            # Injects vcpkg's CMake toolchain using the VCPKG_ROOT exported by run-vcpkg.
             -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" \
-            # Tells vcpkg which architecture/linking triplet to use (e.g., arm64-osx-static).
             -DVCPKG_TARGET_TRIPLET="${{ matrix.triplet }}" \
-            # Explicitly points vcpkg to the directory containing vcpkg.json.
             -DVCPKG_MANIFEST_DIR="${{ github.workspace }}" \
-            # Forces IfcOpenShell modules into shared library mode, overriding vcpkg's static default.
             -DBUILD_SHARED_LIBS=ON \
-            # Enables internal ccache support flags defined inside IfcOpenShell's CMakeLists.txt.
             -DUSE_CCACHE=ON \
-            # Strips CLI converters, GUI viewers, Blender addons, and unit tests.
             -DMINIMAL_BUILD=ON \
-            # Disables Python SWIG wrappers, removing dependencies on Python development headers.
+            -DWITH_CGAL=OFF \
             -DBUILD_IFCPYTHON=OFF \
-            # Activates compilation of the flat C API shared library inside src/ifcwrap.
             -DBUILD_IFCAPI=ON \
-            # Uses pre-generated C header/cpp files, skipping Python/libclang code generation.
             -DIFCAPI_REGENERATE_BINDINGS=OFF \
-            # Limits schema generation to modern standards, saving significant RAM and compilation time.
             -DSCHEMA_VERSIONS="2x3;4;4x3_add2"
 
       # Step 8: Compiles the source files and links them into a dynamic shared library.
