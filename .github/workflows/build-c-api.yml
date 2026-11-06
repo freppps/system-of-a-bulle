@@ -52,15 +52,6 @@ jobs:
           submodules: recursive
           path: ifcopenshell
 
-      # Step 2: Checkout upstream IfcOpenShell repository
-      - name: 2. Checkout Upstream IfcOpenShell (${{ env.UPSTREAM_REF }})
-        uses: actions/checkout@v7
-        with:
-          repository: IfcOpenShell/IfcOpenShell
-          ref: ${{ env.UPSTREAM_REF }}
-          submodules: recursive
-          path: ifcopenshell
-
       # Step 2.5: Apply upstream stability patches inline
       - name: 2.5. Apply Upstream C API Patch
         shell: bash
