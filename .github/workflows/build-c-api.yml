@@ -41,10 +41,10 @@ jobs:
 
     steps:
       - name: 1. Checkout C API Builder Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 2. Checkout Upstream IfcOpenShell (${{ env.UPSTREAM_REF }})
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: IfcOpenShell/IfcOpenShell
           ref: ${{ env.UPSTREAM_REF }}
