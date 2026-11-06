@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Uses release triplets to build only Release libraries (skipping Debug)
+          # Release triplets compile static dependencies without Debug overhead
           - os: ubuntu-22.04
             triplet: x64-linux-release
             artifact_name: ifcopenshell-c-api-linux-x64
@@ -38,9 +38,11 @@ jobs:
       UPSTREAM_REF: ${{ github.event.inputs.ifc_ref || 'v0.9.0' }}
 
     steps:
+      # Step 1: Checkout builder repository
       - name: 1. Checkout C API Builder Repository
         uses: actions/checkout@v7
 
+      # Step 2: Checkout upstream IfcOpenShell repository
       - name: 2. Checkout Upstream IfcOpenShell (${{ env.UPSTREAM_REF }})
         uses: actions/checkout@v7
         with:
@@ -49,10 +51,12 @@ jobs:
           submodules: recursive
           path: ifcopenshell
 
+      # Step 3: Stage vcpkg.json in repository root
       - name: 3. Stage vcpkg Manifest
         run: |
           cp .github/workflows/vcpkg.json ./vcpkg.json
 
+      # Step 4: Install build tools and full X11/OpenGL development packages (Linux)
       - name: 4. Install Toolchain Dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -62,6 +66,7 @@ jobs:
             libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxext-dev \
             libxmu-dev libxi-dev
 
+      # Step 4: Install build tools and force modern Bison (macOS)
       - name: 4. Install Toolchain Dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -69,6 +74,7 @@ jobs:
           brew install cmake ninja bison flex
           echo "$(brew --prefix bison)/bin" >> $GITHUB_PATH
 
+      # Step 5: C++ compiler object caching
       - name: 5. Setup ccache (C++ Object Cache)
         uses: hendrikmuhs/ccache-action@v1.2
         with:
@@ -77,12 +83,13 @@ jobs:
             ccache-${{ runner.os }}-${{ matrix.triplet }}-
           max-size: 2G
 
-      # Modern vcpkg commit supporting OpenCASCADE on Apple Silicon and modern Linux
+      # Step 6: Setup vcpkg with modern commit
       - name: 6. Setup vcpkg Toolchain
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgGitCommitId: '351757dd7b0c6518412ca98b3ef7982861a47fc6'
 
+      # Step 7: Expose runtime tokens for GitHub's native binary cache (x-gha)
       - name: 7. Expose GitHub Actions Cache to vcpkg
         uses: actions/github-script@v7
         with:
@@ -90,6 +97,7 @@ jobs:
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
+      # Step 8: Configure CMake with release triplets and non-GPL flags
       - name: 8. Configure CMake for C API Target
         run: |
           cmake -S ifcopenshell/cmake -B build \
@@ -109,17 +117,20 @@ jobs:
             -DIFCAPI_REGENERATE_BINDINGS=OFF \
             -DSCHEMA_VERSIONS="2x3;4;4x3_add2"
 
+      # Step 9: Build only the C API library and its dependencies
       - name: 9. Compile C API Shared Library
         run: |
           cmake --build build --target ifcopenshell_api --parallel
 
+      # Step 10: Dereference symlinks (-L) to collect true standalone binaries
       - name: 10. Stage C API Artifacts
         shell: bash
         run: |
           mkdir -p dist
-          find build -name "${{ matrix.lib_pattern }}*" -exec cp {} dist/ \;
+          find build -name "${{ matrix.lib_pattern }}*" -exec cp -L {} dist/ \;
           find ifcopenshell/src/ifcwrap -name "ifcopenshell_api.h" -exec cp {} dist/ \;
 
+      # Step 11: Upload artifacts to workflow summary
       - name: 11. Upload C API Artifacts (Branch CI)
         uses: actions/upload-artifact@v7
         with:
@@ -127,6 +138,7 @@ jobs:
           path: dist/*
           retention-days: 7
 
+      # Step 12: Attach binaries to GitHub Release on tags
       - name: 12. Publish C API Assets to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
