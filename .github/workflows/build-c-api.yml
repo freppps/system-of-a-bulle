@@ -65,14 +65,15 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             cmake ninja-build bison flex gcc g++ pkg-config \
             libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxext-dev \
-            libxmu-dev libxi-dev
+            libxmu-dev libxi-dev \
+            autoconf autoconf-archive automake libtool
 
       # Step 4: Install build tools and force modern Bison (macOS)
       - name: 4. Install Toolchain Dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
           brew update
-          brew install cmake ninja bison flex
+          brew install cmake ninja bison flex autoconf autoconf-archive automake libtool
           echo "$(brew --prefix bison)/bin" >> $GITHUB_PATH
 
       # Step 5: C++ compiler object caching
