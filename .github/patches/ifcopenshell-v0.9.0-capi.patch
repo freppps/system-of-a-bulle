@@ -2,7 +2,7 @@ mkdir -p .github/patches
 cat << 'EOF' > .github/patches/ifcopenshell-v0.9.0-capi.patch
 --- a/src/ifcwrap/binding_generator/generated/ifcopenshell_api.cpp
 +++ b/src/ifcwrap/binding_generator/generated/ifcopenshell_api.cpp
-@@ -2457,7 +2457,7 @@
+@@ -2457,6 +2457,6 @@
  bool ifcopenshell_geom_create_tree(ifcopenshell_geom_tree_t** out_result) {
      IFCOPENSHELL_CAPI_TRY
 -        auto result_value = std::unique_ptr<ifcopenshell::geom::tree>(new ifcopenshell::geom::tree());
