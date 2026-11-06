@@ -100,8 +100,7 @@ jobs:
       - name: 6. Setup vcpkg Toolchain
         uses: lukka/run-vcpkg@v11
         with:
-          # Pins vcpkg to a fixed Git commit to prevent upstream package version drift.
-          vcpkgGitCommitId: '2024.03.01'
+          vcpkgGitCommitId: '5b1214315250939257ef5d62ecdcbca18cf4fb1c'
 
       # Caches compiled third-party dependencies (OpenCASCADE, Boost, Eigen) via GitHub's cache.
       - name: 7. Restore / Save vcpkg Binary Cache (Dependencies)
