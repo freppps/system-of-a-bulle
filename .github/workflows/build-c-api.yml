@@ -101,8 +101,6 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET="${{ matrix.triplet }}" \
             -DVCPKG_MANIFEST_DIR="${{ github.workspace }}" \
-            -DBUILD_SHARED_LIBS=ON \
-            -DUSE_CCACHE=ON \
             -DMINIMAL_BUILD=ON \
             -DBUILD_IFCPYTHON=OFF \
             -DBUILD_IFCAPI=ON \
