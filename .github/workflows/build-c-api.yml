@@ -52,6 +52,20 @@ jobs:
           submodules: recursive
           path: ifcopenshell
 
+      # Step 2: Checkout upstream IfcOpenShell repository
+      - name: 2. Checkout Upstream IfcOpenShell (${{ env.UPSTREAM_REF }})
+        uses: actions/checkout@v7
+        with:
+          repository: IfcOpenShell/IfcOpenShell
+          ref: ${{ env.UPSTREAM_REF }}
+          submodules: recursive
+          path: ifcopenshell
+
+      # Step 2.5: Apply upstream stability patches
+      - name: 2.5. Apply Upstream C API Patch
+        run: |
+          git -C ifcopenshell apply --ignore-whitespace ../.github/patches/ifcopenshell-v0.9.0-capi.patch
+
       # Step 3: Stage vcpkg.json in repository root
       - name: 3. Stage vcpkg Manifest
         run: |
