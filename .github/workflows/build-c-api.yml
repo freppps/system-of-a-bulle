@@ -70,12 +70,20 @@ jobs:
           brew install cmake ninja bison flex
           echo "$(brew --prefix bison)/bin" >> $GITHUB_PATH
 
-      - name: 5. Setup vcpkg Toolchain
+      - name: 5. Setup ccache (C++ Object Cache)
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ccache-${{ runner.os }}-${{ matrix.triplet }}-${{ env.UPSTREAM_REF }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ matrix.triplet }}-
+          max-size: 2G
+
+      - name: 6. Setup vcpkg Toolchain
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgGitCommitId: '2024.03.01'
 
-      - name: 6. Restore / Save vcpkg Binary Cache
+      - name: 7. Restore / Save vcpkg Binary Cache (Dependencies)
         uses: actions/cache@v4
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
@@ -83,38 +91,41 @@ jobs:
           restore-keys: |
             vcpkg-${{ runner.os }}-${{ matrix.triplet }}-
 
-      - name: 7. Configure CMake for C API Target
+      - name: 8. Configure CMake for C API Target
         run: |
           cmake -S ifcopenshell/cmake -B build \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET="${{ matrix.triplet }}" \
+            -DVCPKG_MANIFEST_DIR="${{ github.workspace }}" \
             -DMINIMAL_BUILD=ON \
             -DBUILD_IFCPYTHON=OFF \
             -DBUILD_IFCAPI=ON \
             -DIFCAPI_REGENERATE_BINDINGS=OFF \
             -DSCHEMA_VERSIONS="2x3;4;4x3_add2"
 
-      - name: 8. Compile C API Shared Library
+      - name: 9. Compile C API Shared Library
         run: |
           cmake --build build --target ifcopenshell_api --parallel
 
-      - name: 9. Stage C API Artifacts
+      - name: 10. Stage C API Artifacts
         shell: bash
         run: |
           mkdir -p dist
           find build -name "${{ matrix.lib_pattern }}*" -exec cp {} dist/ \;
           find ifcopenshell/src/ifcwrap -name "ifcopenshell_api.h" -exec cp {} dist/ \;
 
-      - name: 10. Upload C API Artifacts (Branch CI)
+      - name: 11. Upload C API Artifacts (Branch CI)
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: dist/*
           retention-days: 7
 
-      - name: 11. Publish C API Assets to GitHub Release
+      - name: 12. Publish C API Assets to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
