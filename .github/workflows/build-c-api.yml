@@ -36,6 +36,7 @@ jobs:
 
     env:
       UPSTREAM_REF: ${{ github.event.inputs.ifc_ref || 'v0.9.0' }}
+      VCPKG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       # Step 1: Checkout builder repository
