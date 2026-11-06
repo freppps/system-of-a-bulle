@@ -25,12 +25,12 @@ jobs:
           - os: ubuntu-22.04
             triplet: x64-linux-release
             artifact_name: ifcopenshell-c-api-linux-x64
-            lib_pattern: "libifcopenshell_api.so"
+            lib_pattern: "libifcopenshell*api*.so"
 
           - os: macos-latest
             triplet: arm64-osx-release
             artifact_name: ifcopenshell-c-api-macos-arm64
-            lib_pattern: "libifcopenshell_api.dylib"
+            lib_pattern: "libifcopenshell*api*.dylib"
 
     runs-on: ${{ matrix.os }}
 
@@ -120,14 +120,14 @@ jobs:
       # Step 9: Build only the C API library and its dependencies
       - name: 9. Compile C API Shared Library
         run: |
-          cmake --build build --target ifcopenshell_api --parallel
+          cmake --build build --target ifcopenshell_capi --parallel
 
       # Step 10: Dereference symlinks (-L) to collect true standalone binaries
       - name: 10. Stage C API Artifacts
         shell: bash
         run: |
           mkdir -p dist
-          find build -name "${{ matrix.lib_pattern }}*" -exec cp -L {} dist/ \;
+          find build \( -name "*ifcopenshell*api*.so*" -o -name "*ifcopenshell*api*.dylib*" \) -exec cp -L {} dist/ \;
           find ifcopenshell/src/ifcwrap -name "ifcopenshell_api.h" -exec cp {} dist/ \;
 
       # Step 11: Upload artifacts to workflow summary
