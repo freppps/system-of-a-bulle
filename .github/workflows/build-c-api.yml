@@ -32,9 +32,9 @@ jobs:
             artifact_name: ifcopenshell-c-api-linux-x64
             lib_pattern: "libifcopenshell_api.so"
 
-          # macOS configuration: compiles for Apple Silicon; static triplet bakes dependencies into the .dylib.
+          # macOS configuration: arm64-osx produces static archives for third-party deps by default.
           - os: macos-latest
-            triplet: arm64-osx-static
+            triplet: arm64-osx
             artifact_name: ifcopenshell-c-api-macos-arm64
             lib_pattern: "libifcopenshell_api.dylib"
 
@@ -55,9 +55,7 @@ jobs:
         with:
           repository: IfcOpenShell/IfcOpenShell
           ref: ${{ env.UPSTREAM_REF }}
-          # recursive: clones nested submodules required by the core engine.
           submodules: recursive
-          # path: isolates upstream source files so they do not collide with builder files.
           path: ifcopenshell
 
       # Step 3: Copies vcpkg.json to the workspace root where the vcpkg toolchain expects to find it.
@@ -70,7 +68,6 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          # --no-install-recommends avoids downloading non-essential packages, keeping runner image lean.
           sudo apt-get install --no-install-recommends -y \
             cmake ninja-build bison flex gcc g++ pkg-config \
             libgl1-mesa-dev libx11-dev libxext-dev
@@ -81,45 +78,34 @@ jobs:
         run: |
           brew update
           brew install cmake ninja bison flex
-          # Prepends Homebrew Bison to PATH so CMake uses Bison 3+ when generating STEP schema parsers.
           echo "$(brew --prefix bison)/bin" >> $GITHUB_PATH
 
       # Step 5: Sets up ccache to cache intermediate compiled C++ object files (.o) across runs.
       - name: 5. Setup ccache (C++ Object Cache)
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          # Key is tied to OS, triplet, and Git ref to avoid reusing invalid intermediate objects.
           key: ccache-${{ runner.os }}-${{ matrix.triplet }}-${{ env.UPSTREAM_REF }}
-          # Fallback prefix: reuses compatible object files if the exact commit hash changes.
           restore-keys: |
             ccache-${{ runner.os }}-${{ matrix.triplet }}-
-          # Caps cache storage at 2 GB to stay well within GitHub's free 10 GB repository limit.
           max-size: 2G
 
       # Step 6: Sets up Microsoft vcpkg using a valid 40-character SHA-1 commit hash.
-      # Note: run-vcpkg@v11 automatically handles dependency caching via GitHub's internal cache (x-gha).
       - name: 6. Setup vcpkg Toolchain
         uses: lukka/run-vcpkg@v11
         with:
-          # Full 40-character SHA-1 commit hash as strictly required by run-vcpkg validation.
           vcpkgGitCommitId: '5b1214315250939257ef5d62ecdcbca18cf4fb1c'
 
-      # Step 7: Configures the build system, disables CGAL, and links vcpkg static dependencies.
-      - name: 7. Configure CMake for C API Target
+      # Step 7: Exposes internal GitHub cache URL and Token so vcpkg binary caching (x-gha) can connect.
+      - name: 7. Expose GitHub Actions Cache to vcpkg
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      # Step 8: Configures the build system, disables CGAL, and links vcpkg static dependencies.
+      - name: 8. Configure CMake for C API Target
         run: |
-          # Notes on flags:
-          # -G Ninja: Enables multi-threaded parallel compilation.
-          # -DCMAKE_BUILD_TYPE=Release: Applies -O3 compiler optimizations.
-          # -DCMAKE_*_COMPILER_LAUNCHER=ccache: Reuses cached object files.
-          # -DCMAKE_TOOLCHAIN_FILE: Integrates vcpkg dependencies.
-          # -DVCPKG_TARGET_TRIPLET: Matches target platform architecture.
-          # -DVCPKG_MANIFEST_DIR: Locates root vcpkg.json.
-          # -DBUILD_SHARED_LIBS=ON: Fixes fatal error when using static triplets.
-          # -DMINIMAL_BUILD=ON & -DWITH_CGAL=OFF: Completely strips GPL CGAL code.
-          # -DBUILD_IFCPYTHON=OFF: Disables Python SWIG wrappers.
-          # -DBUILD_IFCAPI=ON: Enables flat C API shared library.
-          # -DIFCAPI_REGENERATE_BINDINGS=OFF: Uses pre-generated headers.
-          # -DSCHEMA_VERSIONS: Compiles only IFC2x3, IFC4, and IFC4x3_add2.
           cmake -S ifcopenshell/cmake -B build \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
@@ -137,42 +123,34 @@ jobs:
             -DIFCAPI_REGENERATE_BINDINGS=OFF \
             -DSCHEMA_VERSIONS="2x3;4;4x3_add2"
 
-      # Step 8: Compiles the source files and links them into a dynamic shared library.
-      - name: 8. Compile C API Shared Library
+      # Step 9: Compiles the source files and links them into a dynamic shared library.
+      - name: 9. Compile C API Shared Library
         run: |
-          # --target ifcopenshell_api: prunes the build tree to only compile what this target needs.
-          # --parallel: compiles across all available CPU cores simultaneously.
           cmake --build build --target ifcopenshell_api --parallel
 
-      # Step 9: Extracts the finished deliverables from the build tree into an isolated staging folder.
-      - name: 9. Stage C API Artifacts
+      # Step 10: Extracts the finished deliverables from the build tree into an isolated staging folder.
+      - name: 10. Stage C API Artifacts
         shell: bash
         run: |
           mkdir -p dist
-          # Copies the compiled dynamic library (.so on Linux, .dylib on macOS).
           find build -name "${{ matrix.lib_pattern }}*" -exec cp {} dist/ \;
-          # Copies the C header file containing function signatures needed for Dart's ffigen.
           find ifcopenshell/src/ifcwrap -name "ifcopenshell_api.h" -exec cp {} dist/ \;
 
-      # Step 10: Uploads staging artifacts as a downloadable ZIP archive on test and branch runs.
-      - name: 10. Upload C API Artifacts (Branch CI)
+      # Step 11: Uploads staging artifacts as a downloadable ZIP archive on test and branch runs.
+      - name: 11. Upload C API Artifacts (Branch CI)
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: dist/*
-          # Automatically deletes test artifacts after 7 days to conserve GitHub storage quota.
           retention-days: 7
 
-      # Step 11: Creates an official GitHub Release and attaches binary assets when a Git tag is pushed.
-      - name: 11. Publish C API Assets to GitHub Release
-        # Condition: only executes when the Git reference starts with 'refs/tags/'.
+      # Step 12: Creates an official GitHub Release and attaches binary assets when a Git tag is pushed.
+      - name: 12. Publish C API Assets to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          # Attaches the standalone dynamic library and the C header to the release.
           files: |
             dist/${{ matrix.lib_pattern }}
             dist/ifcopenshell_api.h
         env:
-          # Built-in GitHub Actions token providing write permissions to create releases.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
