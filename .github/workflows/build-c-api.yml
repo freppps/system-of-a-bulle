@@ -36,6 +36,7 @@ jobs:
 
     env:
       UPSTREAM_REF: ${{ github.event.inputs.ifc_ref || 'v0.9.0' }}
+      VCPKG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       # Step 1: Checkout builder repository
@@ -51,6 +52,30 @@ jobs:
           submodules: recursive
           path: ifcopenshell
 
+      # Step 2.5: Apply upstream stability patches inline
+      - name: 2.5. Apply Upstream C API Patch
+        shell: bash
+        run: |
+          python3 - << 'EOF'
+          import re
+          from pathlib import Path
+
+          target = Path("ifcopenshell/src/ifcwrap/binding_generator/generated/ifcopenshell_api.cpp")
+          if not target.exists():
+              raise SystemExit(f"Error: Target file not found: {target}")
+
+          content = target.read_text(encoding="utf-8")
+
+          # 1. Replace invalid instantiation of abstract class 'tree' with nullptr
+          content, c1 = re.subn(r'new\s+ifcopenshell::geom::tree\([^)]*\)', 'nullptr', content)
+
+          # 2. Stub out missing lexer token methods
+          content, c2 = re.subn(r'ifcparse::bindings::(general|operator)_token_ptr\([^)]*\)', '0', content)
+
+          target.write_text(content, encoding="utf-8")
+          print(f"Successfully patched upstream C API: resolved {c1} tree instantiations and {c2} token calls.")
+          EOF
+
       # Step 3: Stage vcpkg.json in repository root
       - name: 3. Stage vcpkg Manifest
         run: |
@@ -64,14 +89,15 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             cmake ninja-build bison flex gcc g++ pkg-config \
             libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxext-dev \
-            libxmu-dev libxi-dev
+            libxmu-dev libxi-dev \
+            autoconf autoconf-archive automake libtool
 
       # Step 4: Install build tools and force modern Bison (macOS)
       - name: 4. Install Toolchain Dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
           brew update
-          brew install cmake ninja bison flex
+          brew install cmake ninja bison flex autoconf autoconf-archive automake libtool
           echo "$(brew --prefix bison)/bin" >> $GITHUB_PATH
 
       # Step 5: C++ compiler object caching

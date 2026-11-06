@@ -8,13 +8,8 @@
       "default-features": false,
       "features": ["tbb"]
     },
-    "boost-iostreams",
-    "boost-program-options",
-    "boost-regex",
-    "boost-system",
-    "boost-thread",
+    "boost",
     "eigen3",
-    "libxml2",
-    "pcre2"
+    "libxml2"
   ]
 }
