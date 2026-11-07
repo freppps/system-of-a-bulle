@@ -39,6 +39,9 @@ jobs:
       VCPKG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite"
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_SLOPPINESS: "include_file_mtime,time_macros"
 
     steps:
       # Step 1: Checkout builder repository
