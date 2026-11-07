@@ -116,13 +116,14 @@ jobs:
         with:
           vcpkgGitCommitId: '351757dd7b0c6518412ca98b3ef7982861a47fc6'
 
-      # Step 7: Expose runtime tokens for GitHub's native binary cache (x-gha)
-      - name: 7. Expose GitHub Actions Cache to vcpkg
-        uses: actions/github-script@v7
+      # Step 7: Cache vcpkg pre-compiled binary packages
+      - name: 7. Cache vcpkg Binary Archives
+        uses: actions/cache@v7
         with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+          path: ${{ github.workspace }}/.vcpkg-cache
+          key: vcpkg-${{ runner.os }}-${{ matrix.triplet }}-${{ hashFiles('.github/workflows/vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-${{ matrix.triplet }}-
 
       # Step 8: Configure CMake with release triplets and non-GPL flags
       - name: 8. Configure CMake for C API Target
